@@ -1,6 +1,20 @@
 #include <iostream>
 #include <fstream>
 #include <cstdint>
+#include <vector>
+#include <math.h>
+
+std::string from_time( double t )
+{
+    int s = t;
+    t -= s;
+    int m = s/60;
+    s -= m*60;
+
+    return std::to_string( m )+":"+std::to_string(s)+":"+std::to_string( (int)(t*1000) );
+}
+
+bool verbose = false;
 
 typedef uint8_t sample_t;
 
@@ -9,76 +23,129 @@ typedef enum
     k3700, k2400
 }   e_freq;
 
-void parse( const sample_t *data, size_t sample_count )
+
+constexpr double DELTA=1/22050.0/2;
+
+struct Parser
 {
-    bool state = false;
-    e_freq current = k3700;
-    const sample_t CUTOFF = 128;
+    static const sample_t MID = 128;
+    static constexpr double width_9 = (7.452/3)/9/1000;
+    static constexpr double width_6 = (7.452/3)/6/1000;
+    static constexpr double width_epsilon = width_9/3;
 
-    size_t last = 0;
+    double time = 0;
 
-    size_t count[2] = { 0, 0 };
+    bool state = true;    //  We start "lower than MID"
 
-    uint8_t result = 0;
+    double last_time = 0;
 
-    size_t bit_read = 6;
+    std::vector<bool> result;
 
-    for (size_t i=0;i!=sample_count;i++)
+    void add_bit( int bit )
     {
-        sample_t s = data[i];
-        if (!state)
+        result.push_back( bit );
+        std::cout << bit;
+    }
+
+    double is_6_ = true;     //  We start at the same 6 to 9 pulse sequence
+
+    int counter[2] = { 0, 0 };
+
+    void add_pulse( bool is_6 )
+    {
+        counter[is_6]++;
+        // std::cout << (is_6_?"6":"9");
+        if (is_6_ && !is_6)
         {
-            if (s>=CUTOFF)
-            {
-                state = true;
-                size_t delta = i-last;
-                last = i;
-                // std::cout << "(" << i << " " << delta << ")";
+            int c9 = counter[false];
+            int c6 = counter[true];
+            if (c9==9 || c9==11) c9 = 10;
+            if (c9==17 || c9==19) c9 = 18;
+            if (c6==10 || c6==12) c6 = 11;
+            if (c6==5 || c6==7) c6 = 6;
 
-                if (delta>10 && delta<20)
-                {   if (delta<=14)
-                    {
-                        if (current==k2400)
-                        {
-                            //  bit boundary
-                            if (count[0]>count[1])
-                            {   result *= 2;
-                                // std::cout << "0";
-                            }
-                            else
-                            {   result *= 2;
-                                result ++;
-                                // std::cout << "1";
-                            }
-                            if (bit_read++==7)
-                            {
-                                // std::cout << " -> " << i << " " << i/22050.0 << ":" << (int)result << "\n";
-                                std::cout << (char)(result&0x7f);
-                                result = 0;
-                                bit_read = 0;
-                            }
+            if (c9==10 && c6==11) add_bit( 1 );
+            else if (c9==18 && c6==6) add_bit( 0 );
+            else std::cout << "? (" << from_time(time) << " " << counter[false] << "/" << counter[true] << ")";
 
-                            count[0] = count[1] = 0;
-                        }
-                        current = k3700;
-                        count[0]++;
-                    }
-                    else
-                    {
-                        current = k2400;
-                        count[1]++;
-                    }
-                }
-            }
+            counter[0] = counter[1] = 0;
         }
-        else
+
+        is_6_ = is_6;
+    }
+
+    //  Called for each zero-crossing
+    void zero_cross()
+    {
+        double w = time-last_time;
+        last_time = time;
+
+// std::cout << "(" << w << " " << width_9 << ")";
+
+        if (::fabs(w-width_9)<width_epsilon)
+            add_pulse( false );
+        else if (::fabs(w-width_6)<width_epsilon)
+            add_pulse( true );
+        else if (verbose)
+            std::cout << "\nZERO CROSSING AT " << from_time(time) << " : width = " << w <<
+            " 9 = [" << width_9-width_epsilon << "-" << width_9+width_epsilon << "] "
+            " 6 = [" << width_6-width_epsilon << "-" << width_6+width_epsilon << "]\n";
+            else std::cout << "*";
+    }
+
+    //  Called to add each sample
+    void add( bool low )
+    {
+        if (state != low)           //  We changed state from LOW->HIGH or HIGH->LOW
         {
-            if (s<CUTOFF)
-            {
-                state = false;
-            }
+            state = low;
+            if (!low)               //  Now in HIGH
+                zero_cross();       //  Zero cross
         }
     }
+
+    //  Called to add each sample
+    void add( const sample_t sample )
+    {
+        time += DELTA;
+        add( sample<MID );
+    }
+};
+
+std::string string_from_bits( const std::vector<bool> b, int delta = 0 )
+{
+    uint8_t ch;
+    int bit_ix=delta;
+    std::string result;
+
+    for (auto bit:b)
+    {
+        ch/=2;
+        if (bit) ch += 128;
+        bit_ix++;
+        if (bit_ix==8)
+        {
+            bit_ix = 0;
+            result.push_back( ch );
+        }
+    }
+
+    return result;
+}
+
+void parse( const sample_t *data, size_t sample_count )
+{
+    Parser p;
+    for (size_t i=0;i!=sample_count;i++)
+        p.add( data[i] );
+
+    for (int i=0;i!=8;i++)
+    {
+        std::cout << "\n\n\n------------------------------------- " << i << "\n\n\n";
+        std::cout << string_from_bits( p.result, i );
+    }
+
+    return;
 }
 
 using namespace std;
