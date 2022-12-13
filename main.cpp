@@ -16,8 +16,8 @@ std::string from_time( double t )
     return std::to_string( m )+":"+std::to_string(s)+":"+std::to_string( (int)(t*1000) );
 }
 
-bool silent = true;
-bool verbose = false;
+bool silent = false;
+bool verbose = true;
 
 typedef uint8_t sample_t;
 
@@ -196,12 +196,11 @@ loop:
     return nullptr;
 }
 
-void parse( const sample_t *data, size_t sample_count )
+void parse( const std::vector<sample_t> data )
 {
     Parser p;
-    for (size_t i=0;i!=sample_count;i++)
-        p.add( data[i] );
-
+    for (auto s:data)
+        p.add( s );
 
     // for (int i=0;i!=8;i++)
     // {
@@ -214,24 +213,97 @@ void parse( const sample_t *data, size_t sample_count )
     return;
 }
 
+
+
+std::vector<sample_t> normalize( const std::vector<sample_t> &data, int width=0 )
+{
+    if (width==0)
+        return data;
+
+    if (data.size()<2*width+1)
+        return {};
+
+    auto b = std::begin( data );
+    auto e = std::end( data );
+    std::vector<sample_t> result;
+
+    for (auto d=b+width;d!=e-width;d++)
+    {
+        sample_t min = 255;
+        sample_t max = 0;
+        int sum = 0;
+        for (auto p=d-width;p!=d+width;p++)
+        {
+            min = std::min(min,*p);
+            max = std::max(max,*p);
+            sum += *p;
+        }
+        double value = *d;
+        double avg = sum/(2*width+1);
+
+        if (value>avg)
+            value = 255;
+            // value = (value-avg)/(max-avg+1)*127+128;
+        else
+            // value = 127-(avg-value)/(avg-min+1)*127;
+            value = 0;
+
+       result.push_back( value );
+
+        // for (int i=0;i<value;i++)
+        //     std::cout << "*";
+        // std::cout << "\n";
+    }
+
+    // while (b!=e)
+    //     result.push_back( *b++ );
+
+    return result;
+}
+
+
+
+
+
+
+
+
 using namespace std;
 
 const int BUFF_SIZE = 1024;
 
 int main(int argc, char* argv[])
 {
-  // Check if a file was provided as an argument
-  if (argc < 2)
-  {
-    cerr << "Please provide a WAV file to read" << endl;
-    return 1;
-  }
+    int smooth = 0;
+    const char *file_name = "input.wav";
+
+    argc--;
+    argv++;
+
+    while (argc)
+    {
+        if (!strcmp(*argv,"--help"))
+        {
+            std::cerr << "kmnreader [--smooth <NUM>] file.wav\n";
+            return EXIT_FAILURE;
+        }
+        else if (!strcmp(*argv,"--smooth"))
+        {
+            argc--;
+            argv++;
+            smooth = ::atoi( *argv );
+        }
+        else
+            file_name = *argv;
+        argc--;
+        argv++;
+    }
 
   // Open the WAV file in binary mode
-  ifstream file(argv[1], ios::binary);
+  ifstream file(file_name, ios::binary);
   if (!file.is_open())
   {
-    cerr << "Could not open file " << argv[1] << endl;
+    cerr << "Could not open file " << file_name << endl;
     return 1;
   }
 
@@ -312,12 +384,16 @@ int main(int argc, char* argv[])
     int32_t sample_count;
     file.read((char*)&sample_count, 4);
 
-    sample_t *data = new sample_t[sample_count];
-    file.read( (char *)data, sample_count );
+    sample_t *raw_data = new sample_t[sample_count];
+    file.read( (char *)raw_data, sample_count );
+    delete[] raw_data;
 
-    parse( data, sample_count );
+    std::vector<sample_t> data{ raw_data, raw_data+sample_count };
 
-    delete[] data;
+    auto norm = normalize( data, smooth );
+
+    parse( norm );
+
 
     return EXIT_SUCCESS;
 }
