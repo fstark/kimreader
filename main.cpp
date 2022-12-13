@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <vector>
 #include <math.h>
+#include <algorithm>
+#include <memory>
 
 std::string from_time( double t )
 {
@@ -14,6 +16,7 @@ std::string from_time( double t )
     return std::to_string( m )+":"+std::to_string(s)+":"+std::to_string( (int)(t*1000) );
 }
 
+bool silent = true;
 bool verbose = false;
 
 typedef uint8_t sample_t;
@@ -44,7 +47,8 @@ struct Parser
     void add_bit( int bit )
     {
         result.push_back( bit );
-        std::cout << bit;
+        if (!silent)
+            std::cout << bit;
     }
 
     double is_6_ = true;     //  We start at the same 6 to 9 pulse sequence
@@ -66,7 +70,7 @@ struct Parser
 
             if (c9==10 && c6==11) add_bit( 1 );
             else if (c9==18 && c6==6) add_bit( 0 );
-            else std::cout << "? (" << from_time(time) << " " << counter[false] << "/" << counter[true] << ")";
+            else if (verbose) std::cout << "? (" << from_time(time) << " " << counter[false] << "/" << counter[true] << ")";
 
             counter[0] = counter[1] = 0;
         }
@@ -90,7 +94,7 @@ struct Parser
             std::cout << "\nZERO CROSSING AT " << from_time(time) << " : width = " << w <<
             " 9 = [" << width_9-width_epsilon << "-" << width_9+width_epsilon << "] "
             " 6 = [" << width_6-width_epsilon << "-" << width_6+width_epsilon << "]\n";
-            else std::cout << "*";
+            else if (!silent) std::cout << "*";
     }
 
     //  Called to add each sample
@@ -112,16 +116,16 @@ struct Parser
     }
 };
 
-std::string string_from_bits( const std::vector<bool> b, int delta = 0 )
+std::string string_from_bits( std::vector<bool>::const_iterator b, const std::vector<bool>::const_iterator e )
 {
     uint8_t ch;
-    int bit_ix=delta;
+    int bit_ix=0;
     std::string result;
 
-    for (auto bit:b)
+    while (b!=e)
     {
         ch/=2;
-        if (bit) ch += 128;
+        if (*b++) ch += 128;
         bit_ix++;
         if (bit_ix==8)
         {
@@ -133,17 +137,79 @@ std::string string_from_bits( const std::vector<bool> b, int delta = 0 )
     return result;
 }
 
+// struct kim_data
+// {
+//     uint8_t id;
+//     uint16_t adrs;
+//     std::vector<uint8_t> data;
+//     uint16_t checksum;
+// };
+
+template <class I>
+bool compare_bits( I b, I e, const std::vector<bool> &bits )
+{
+    if (e-b<bits.size())
+        return false;
+    for (auto bit:bits)
+        if (*b++!=bit)
+            return false;
+    return true;
+}
+
+template <class I>
+I find_bits( I b, I e, const std::vector<bool> &bits )
+{
+    while (e-b>=bits.size())
+    {   if (compare_bits(b,b+bits.size(),bits))
+            return b;
+        b++;
+    }
+    return e;   
+}
+
+std::unique_ptr<char * /*kim_data*/> kim_data_from_bits( const std::vector<bool> &encoded )
+{
+
+    //  Find first 'on' bit
+    auto b = std::begin(encoded);
+    auto e = std::end(encoded);
+
+loop:
+    //  Lookup for SYN ('00010110')
+    b = find_bits( b,e, { false, true, true, false, true, false, false, false } );
+
+    if (b==e)
+        return nullptr; //  No on bits left
+    
+    //  Scan by 8 until zero found
+    while (compare_bits( b, e, { false, true, true, false, true, false, false, false } ))
+            b += 8;
+
+    //  check for '*' ('00101010')
+    if (!compare_bits( b, e, { false, true, false, true, false, true, false, false } ))
+        goto loop;  //  evil
+
+    b += 8;
+
+    std::cout << string_from_bits( b, e ) << "\n";
+
+    return nullptr;
+}
+
 void parse( const sample_t *data, size_t sample_count )
 {
     Parser p;
     for (size_t i=0;i!=sample_count;i++)
         p.add( data[i] );
 
-    for (int i=0;i!=8;i++)
-    {
-        std::cout << "\n\n\n------------------------------------- " << i << "\n\n\n";
-        std::cout << string_from_bits( p.result, i );
-    }
+
+    // for (int i=0;i!=8;i++)
+    // {
+    //     std::cout << "\n\n\n------------------------------------- " << i << "\n\n\n";
+    //     std::cout << string_from_bits( p.result, i );
+    // }
+
+    auto start = kim_data_from_bits( p.result );
 
     return;
 }
@@ -229,12 +295,12 @@ int main(int argc, char* argv[])
   file.read((char*)&bits_per_sample, sizeof(bits_per_sample));
 
   // Print the file size, audio format, and number of channels
-  cout << "File size: " << file_size << " bytes" << endl;
-  cout << "Audio format: " << audio_format << " bytes" << endl;
-  cout << "#channels: " << num_channels << " bytes" << endl;
-  cout << "Sample rate: " << sample_rate << " bytes" << endl;
-  cout << "Byte size: " << byte_rate << " bytes" << endl;
-  cout << "Bits per sample: " << bits_per_sample << " bytes" << endl;
+//   cout << "File size: " << file_size << " bytes" << endl;
+//   cout << "Audio format: " << audio_format << " bytes" << endl;
+//   cout << "#channels: " << num_channels << " bytes" << endl;
+//   cout << "Sample rate: " << sample_rate << " bytes" << endl;
+//   cout << "Byte size: " << byte_rate << " bytes" << endl;
+//   cout << "Bits per sample: " << bits_per_sample << " bytes" << endl;
 
   file.read(buffer, 4);
   if (string(buffer, 4) != "data")
