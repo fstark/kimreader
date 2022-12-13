@@ -5,6 +5,7 @@
 #include <math.h>
 #include <algorithm>
 #include <memory>
+#include <cstring>
 
 std::string from_time( double t )
 {
@@ -16,8 +17,8 @@ std::string from_time( double t )
     return std::to_string( m )+":"+std::to_string(s)+":"+std::to_string( (int)(t*1000) );
 }
 
-bool silent = false;
-bool verbose = true;
+bool silent = true;
+bool verbose = false;
 
 typedef uint8_t sample_t;
 
@@ -44,11 +45,29 @@ struct Parser
 
     std::vector<bool> result;
 
+        //  The time at which we fond the last valid transition
+    double last_valid_bit = -1;
+    bool first = true;
+
     void add_bit( int bit )
     {
+        if (!first)
+            while (time-last_valid_bit>10.0/1000)
+            {
+                std::cout << "#";
+                    //  We insert an arbitrary bit
+                result.push_back( 0 );
+                last_valid_bit += 7.452/1000;
+            }
+        first = false;
+        last_valid_bit = time;
+
         result.push_back( bit );
         if (!silent)
+        {
             std::cout << bit;
+            // std::cout << "(" << from_time(time) << ") ";
+        }
     }
 
     double is_6_ = true;     //  We start at the same 6 to 9 pulse sequence
@@ -70,7 +89,19 @@ struct Parser
 
             if (c9==10 && c6==11) add_bit( 1 );
             else if (c9==18 && c6==6) add_bit( 0 );
-            else if (verbose) std::cout << "? (" << from_time(time) << " " << counter[false] << "/" << counter[true] << ")";
+            else
+            {
+                //  We were unable to find if this is a 0 or a 1
+                if (verbose)
+                    std::cout << "? (" << from_time(time) << " " << counter[false] << "/" << counter[true] << ")";
+                else
+                    if (!silent) std::cout << "?";
+
+                // //  We add a '0' anyway
+                // add_bit( 0 );
+                // add_bit( 1 );
+                // add_bit( 0 );
+            }
 
             counter[0] = counter[1] = 0;
         }
@@ -90,11 +121,16 @@ struct Parser
             add_pulse( false );
         else if (::fabs(w-width_6)<width_epsilon)
             add_pulse( true );
-        else if (verbose)
-            std::cout << "\nZERO CROSSING AT " << from_time(time) << " : width = " << w <<
-            " 9 = [" << width_9-width_epsilon << "-" << width_9+width_epsilon << "] "
-            " 6 = [" << width_6-width_epsilon << "-" << width_6+width_epsilon << "]\n";
-            else if (!silent) std::cout << "*";
+        else
+        {
+            //  We have a zero crossing that is not of the correct frequency
+            if (verbose)
+                std::cout << "\nZERO CROSSING AT " << from_time(time) << " : width = " << w <<
+                " 9 = [" << width_9-width_epsilon << "-" << width_9+width_epsilon << "] "
+                " 6 = [" << width_6-width_epsilon << "-" << width_6+width_epsilon << "]\n";
+            else
+                if (!silent) std::cout << "*";
+        }
     }
 
     //  Called to add each sample
@@ -267,6 +303,12 @@ std::vector<sample_t> normalize( const std::vector<sample_t> &data, int width=0 
 
 
 
+bool bool_from_string( const std::string s )
+{
+    if (s=="true")
+        return true;
+    return false;
+}
 
 using namespace std;
 
@@ -284,7 +326,7 @@ int main(int argc, char* argv[])
     {
         if (!strcmp(*argv,"--help"))
         {
-            std::cerr << "kmnreader [--smooth <NUM>] file.wav\n";
+            std::cerr << "kimreader [--silent true|false] [--verbose true|false] [--smooth <NUM>] file.wav\n";
             return EXIT_FAILURE;
         }
         else if (!strcmp(*argv,"--smooth"))
@@ -292,6 +334,18 @@ int main(int argc, char* argv[])
             argc--;
             argv++;
             smooth = ::atoi( *argv );
+        }
+        else if (!strcmp(*argv,"--silent"))
+        {
+            argc--;
+            argv++;
+            silent = ::bool_from_string( *argv );
+        }
+       else if (!strcmp(*argv,"--verbose"))
+        {
+            argc--;
+            argv++;
+            verbose = ::bool_from_string( *argv );
         }
         else
             file_name = *argv;
@@ -386,9 +440,8 @@ int main(int argc, char* argv[])
 
     sample_t *raw_data = new sample_t[sample_count];
     file.read( (char *)raw_data, sample_count );
-    delete[] raw_data;
-
     std::vector<sample_t> data{ raw_data, raw_data+sample_count };
+    delete[] raw_data;
 
     auto norm = normalize( data, smooth );
 
