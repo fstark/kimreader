@@ -49,14 +49,17 @@ struct Parser
     double last_valid_bit = -1;
     bool first = true;
 
+    std::vector<size_t> fixes;
+
     void add_bit( int bit )
     {
         if (!first)
             while (time-last_valid_bit>10.0/1000)
             {
-                std::cout << "#";
+                // std::cout << "#";
                     //  We insert an arbitrary bit
-                result.push_back( 0 );
+                fixes.push_back( result.size() );
+                result.push_back( 1 );
                 last_valid_bit += 7.452/1000;
             }
         first = false;
@@ -245,6 +248,14 @@ void parse( const std::vector<sample_t> data )
     // }
 
     auto start = kim_data_from_bits( p.result );
+
+    if (p.fixes.size()>0)
+    {
+        std::cout << "Inserted '1' in bitstream at positions ";
+        for (auto f:p.fixes)
+            std::cout << f << " ";
+        std::cout << "\n";
+    }
 
     return;
 }
@@ -446,7 +457,6 @@ int main(int argc, char* argv[])
     auto norm = normalize( data, smooth );
 
     parse( norm );
-
 
     return EXIT_SUCCESS;
 }
