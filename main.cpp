@@ -14,7 +14,11 @@ std::string from_time( double t )
     int m = s/60;
     s -= m*60;
 
-    return std::to_string( m )+":"+std::to_string(s)+":"+std::to_string( (int)(t*1000) );
+    char buffer[1024];
+
+    ::sprintf( buffer, "%02d:%02d:%02d.%02d", 0, m, s, (int)(t*1000) );
+
+    return buffer;
 }
 
 bool silent = true;
@@ -49,7 +53,13 @@ struct Parser
     double last_valid_bit = -1;
     bool first = true;
 
-    std::vector<size_t> fixes;
+    struct fix_t
+    {
+        size_t bit_location;
+        double timestamp;
+    };
+
+    std::vector<fix_t> fixes;
 
     void add_bit( int bit )
     {
@@ -58,7 +68,7 @@ struct Parser
             {
                 // std::cout << "#";
                     //  We insert an arbitrary bit
-                fixes.push_back( result.size() );
+                fixes.push_back( { result.size(), last_valid_bit } );
                 result.push_back( 1 );
                 last_valid_bit += 7.452/1000;
             }
@@ -251,10 +261,9 @@ void parse( const std::vector<sample_t> data )
 
     if (p.fixes.size()>0)
     {
-        std::cout << "Inserted '1' in bitstream at positions ";
+        std::cout << "Inserted '1' in bitstream for corrupted segments:\n";
         for (auto f:p.fixes)
-            std::cout << f << " ";
-        std::cout << "\n";
+            std::cout << "  " << from_time( f.timestamp ) << "-" << from_time( f.timestamp+7.452/1000 ) << " -- bit #" << f.bit_location << "\n";
     }
 
     return;
