@@ -66,7 +66,8 @@ struct Parser
         if (!first)
             while (time-last_valid_bit>10.0/1000)
             {
-                // std::cout << "#";
+                if (!silent)
+                    std::cout << "#";
                     //  We insert an arbitrary bit
                 fixes.push_back( { result.size(), last_valid_bit } );
                 result.push_back( 1 );
@@ -245,8 +246,12 @@ loop:
     return nullptr;
 }
 
-void parse( const std::vector<sample_t> data )
+void parse( const std::vector<sample_t> data, std::string patch )
 {
+        //  Should check patch content better
+    if (patch=="")
+        patch="1";
+
     Parser p;
     for (auto s:data)
         p.add( s );
@@ -257,16 +262,21 @@ void parse( const std::vector<sample_t> data )
     //     std::cout << string_from_bits( p.result, i );
     // }
 
-    auto start = kim_data_from_bits( p.result );
+    // auto start = kim_data_from_bits( p.result );
 
     if (p.fixes.size()>0)
     {
-        std::cout << "Inserted '1' in bitstream for corrupted segments:\n";
-        for (auto f:p.fixes)
-            std::cout << "  " << from_time( f.timestamp ) << "-" << from_time( f.timestamp+7.452/1000 ) << " -- bit #" << f.bit_location << "\n";
+        std::cout << "Location in bitstream for corrupted segments:\n";
+        for (int i=0;i!=p.fixes.size();i++)
+        {
+            auto f = p.fixes[i];
+            bool bit = patch[i%patch.size()]=='1';
+            std::cout << "  " << from_time( f.timestamp ) << "-" << from_time( f.timestamp+7.452/1000 ) << " -- bit #" << f.bit_location << " inserted " << bit << "\n";
+            p.result[p.fixes[i].bit_location] = bit;
+        }
     }
 
-    return;
+    kim_data_from_bits( p.result );
 }
 
 
@@ -339,6 +349,8 @@ int main(int argc, char* argv[])
     int smooth = 0;
     const char *file_name = "input.wav";
 
+    std::string patch;
+
     argc--;
     argv++;
 
@@ -347,6 +359,10 @@ int main(int argc, char* argv[])
         if (!strcmp(*argv,"--help"))
         {
             std::cerr << "kimreader [--silent true|false] [--verbose true|false] [--smooth <NUM>] file.wav\n";
+            std::cerr << " '*' : got an zero crossing that is not 2400Hz or 3700Hz\n";
+            std::cerr << " '?' : got a transition from 2400Hz to 3700Hz that is not in a 9-9-6 or 9-6-6 pattern\n";
+            std::cerr << " '#' : inserting an unknown bit\n";
+            std::cerr << "       (insertion is only done *after* a first know bit is found, and only if followed by a known bit)\n";
             return EXIT_FAILURE;
         }
         else if (!strcmp(*argv,"--smooth"))
@@ -366,6 +382,12 @@ int main(int argc, char* argv[])
             argc--;
             argv++;
             verbose = ::bool_from_string( *argv );
+        }
+        else if (!strcmp(*argv,"--patch"))
+        {
+            argc--;
+            argv++;
+            patch = *argv;
         }
         else
             file_name = *argv;
@@ -465,7 +487,7 @@ int main(int argc, char* argv[])
 
     auto norm = normalize( data, smooth );
 
-    parse( norm );
+    parse( norm, patch );
 
     return EXIT_SUCCESS;
 }
