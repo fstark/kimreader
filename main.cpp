@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <memory>
 #include <cstring>
+#include <cassert>
 
 std::string from_time( double t )
 {
@@ -52,15 +53,22 @@ I find_bits( I b, I e, const std::vector<bool> &bits, size_t stride = 1 )
     return e;   
 }
 
+struct fix_t
+{
+    size_t bit_location;    //  location of the corrupted bit in the bitstream
+    double source_ts;       //  Timestamp in the source
+};
+
 
 /// @brief  This is a bitstream, with potentially some unknown bits (but we know where they are)
 class bitstream
 {
     std::vector<bool> bits_;
-    std::vector<size_t> errors_;
+
+    std::vector<fix_t> errors_;
 
 public:
-    bitstream( const std::vector<bool> &bits, const std::vector<size_t> &errors )
+    bitstream( const std::vector<bool> &bits, const std::vector<fix_t> &errors )
         : bits_{ bits }, errors_{ errors }
     {
     }
@@ -85,7 +93,7 @@ public:
         result = bits_;
 
         for (auto e:errors_)
-            result[e] = fix&(1<<ix++);
+            result[e.bit_location] = fix&(1<<ix++);
 
         return result;
     }
@@ -94,10 +102,10 @@ public:
     {
         assert( start+len<=bits_.size() );
 
-        std::vector<size_t> errors;
+        std::vector<fix_t> errors;
         for (auto e:errors_)
-            if (e>=start && e<start+len)
-                errors.push_back( e-start );
+            if (e.bit_location>=start && e.bit_location<start+len)
+                errors.push_back( { e.bit_location-start, e.source_ts } );
 
         return bitstream( std::vector<bool>{ std::begin(bits_)+start, std::begin(bits_)+start+len }, errors );
     }
@@ -126,23 +134,61 @@ public:
         found = true;
         return res-std::begin(bits_);
     }
+
+    void patch( std::string patch_instuctions )
+    {
+        if (errors_.size()>0)
+        {
+            std::vector<fix_t> new_errors;
+
+            if (patch_instuctions=="")
+                patch_instuctions = "x";
+
+            std::cout << "Location in bitstream for corrupted segments:\n";
+            for (int i=0;i!=errors_.size();i++)
+            {
+                auto e = errors_[i];
+                std::cout << "  " << from_time( e.source_ts ) << "-" << from_time( e.source_ts+7.452/1000 ) << " -- bit #" << e.bit_location;
+                switch (patch_instuctions[i%patch_instuctions.size()])
+                {
+                    case '0':
+                        bits_[e.bit_location] = 0;
+                        std::cout << " inserted 0\n";
+                        break;
+                    case '1':
+                        bits_[e.bit_location] = 1;
+                        std::cout << " inserted 1\n";
+                        break;
+                    case 'x':
+                        bits_[e.bit_location] = 1;
+                        std::cout << " unchanged\n";
+                        new_errors.push_back( e );
+                        break;
+                }
+            }
+
+            errors_ = new_errors;
+        }
+    }
+
 };
 
+//  Tests for bitstream object
 void test_bitstream()
 {
-    bitstream b0{ { 0, 0, 0, 0 }, { 2 } };
+    bitstream b0{ { 0, 0, 0, 0 }, { { 2, 0 } } };
     assert( b0.fix_count()==2 );
     assert( (b0.bits(0)==std::vector<bool>{ 0, 0, 0, 0 }) );
     assert( (b0.bits(1)==std::vector<bool>{ 0, 0, 1, 0 }) );
 
-    bitstream b1{ { 1, 0, 1, 0 }, { 1, 3 } };
+    bitstream b1{ { 1, 0, 1, 0 }, { { 1, 0 } , { 3, 0.1 }  } };
     assert( b1.fix_count()==4 );
     assert( (b1.bits(0)==std::vector<bool>{ 1, 0, 1, 0 }) );
     assert( (b1.bits(1)==std::vector<bool>{ 1, 1, 1, 0 }) );
     assert( (b1.bits(2)==std::vector<bool>{ 1, 0, 1, 1 }) );
     assert( (b1.bits(3)==std::vector<bool>{ 1, 1, 1, 1 }) );
 
-    bitstream b2{ { 0, 0, 0, 0, 0, 0 }, { 1, 3, 5 } };
+    bitstream b2{ { 0, 0, 0, 0, 0, 0 }, { { 1, 0} , { 3, 0.1} , { 5, 0.2} } };
     auto b3 = b2.slice( 1, 3 );
     assert( b3.fix_count()==4 );
     assert( (b3.bits(3)==std::vector<bool>{ 1, 0, 1 }) );
@@ -180,12 +226,6 @@ struct Parser
         //  The time at which we fond the last valid transition
     double last_valid_bit = -1;
     bool first = true;
-
-    struct fix_t
-    {
-        size_t bit_location;
-        double timestamp;
-    };
 
     std::vector<fix_t> fixes;
 
@@ -292,6 +332,12 @@ struct Parser
         time += DELTA;
         add( sample<MID );
     }
+
+    //  Converts into a bitstream (we should do everything on a bitstream in reality)
+    bitstream get_bitstream() 
+    {
+        return bitstream{ result, fixes };
+    }
 };
 
 std::string string_from_bits( std::vector<bool>::const_iterator b, const std::vector<bool>::const_iterator e )
@@ -350,7 +396,8 @@ bool byte_from_hex1( char c, uint8_t &result )
         return true;
     }
 
-    std::cout << "BYTE IS NOT HEX\n\n\n";
+    if (!silent)
+        std::cerr << "BYTE IS NOT HEX\n\n\n";
 
     return false;
 }
@@ -371,7 +418,8 @@ bool bytes_from_ascii_hex( std::vector<uint8_t>::const_iterator b, const std::ve
 {
     if ((e-b)%2!=0)
     {
-        std::cerr << "NOT ASCII\n";
+        if (!silent)
+            std::cerr << "NOT ASCII\n";
         return false;
     }
     while (b<e)
@@ -380,7 +428,7 @@ bool bytes_from_ascii_hex( std::vector<uint8_t>::const_iterator b, const std::ve
         if (!byte_from_hex2( b[0], b[1], curr ))
             return false;
         result.push_back( curr );
-        std::cout << "[" << (int)curr << "]";
+        // std::cout << "[" << (int)curr << "]";
         b += 2;
     }
 
@@ -391,27 +439,47 @@ bool bytes_from_bits( std::vector<bool>::const_iterator b, const std::vector<boo
 {
     if ((e-b)%16!=0)
     {
-        std::cerr << "bits not multiples of 16\n";
+        if (!silent)
+            std::cerr << "bits not multiples of 16\n";
         return false;
     }
 
     auto hex = ascii_hex_from_bits( b, e );
-    bytes_from_ascii_hex( std::begin(hex), std::end(hex), result );
-
-    return true;
+    return bytes_from_ascii_hex( std::begin(hex), std::end(hex), result );
 }
 
 struct kim_data
 {
-     uint8_t id;
-     uint16_t adrs;
-     std::vector<uint8_t> data;
-     uint16_t checksum;
+    uint8_t id;
+    uint16_t adrs;
+    std::vector<uint8_t> data;
+    uint16_t checksum;
+
+    uint16_t compute_checksum()
+    {
+        uint16_t result = 0;
+        for (auto b:data)
+            result += b;
+        result -= data[0];  //  ID is not in checksum
+        return result;
+    }
+
+    void dump()
+    {
+        printf( "ID: %02X LOADED AT: %04X", id, adrs );
+        for (int i=3;i!=data.size();i++)
+        {
+            if ((i%16)==3)
+                printf( "\n    " );
+            printf( "%02X ", data[i] );
+        }
+        printf( "\n" );
+    }
+
 };
 
-std::unique_ptr<char * /*kim_data*/> kim_data_from_bits( const std::vector<bool> &encoded )
+bool kim_data_from_bits( const std::vector<bool> &encoded, kim_data &result )
 {
-
     //  Find first 'on' bit
     auto b = std::begin(encoded);
     auto e = std::end(encoded);
@@ -421,7 +489,7 @@ loop:
     b = find_bits( b,e, { false, true, true, false, true, false, false, false } );
 
     if (b==e)
-        return nullptr; //  No on bits left
+        return false; //  No on bits left
     
     //  Scan by 8 until zero found
     while (compare_bits( b, e, { false, true, true, false, true, false, false, false } ))
@@ -439,35 +507,65 @@ loop:
     auto slash = find_bits( b, e, { true, true, true, true, false, true, false, false }, 8 );
     if (slash==e)
     {
-        std::cerr << "'/ not found\n";
-        return nullptr;
+        if (!silent)
+            std::cerr << "'/ not found\n";
+        return false;
     }
 
     //  Look for the EOF 0x04 '00000100'
     auto eos = find_bits( slash, e, { false, false, true, false, false, false, false, false }, 8 );
     if (eos==e)
     {
-        std::cerr << "EOS not found\n";
-        return nullptr;
+        if (!silent)
+            std::cerr << "EOS not found\n";
+        return false;
     }
 
-    std::vector<uint8_t> bytes;
-    if (!bytes_from_bits( b, slash, bytes ))
+    //  Check EOF is 40 bits (5 bytes) after the '/'
+    if (eos-slash!=40)
     {
-        std::cout << "Cannot parse\n";
+        if (!silent)
+            std::cerr << "'/' and EOS not 40 bits apart'\n";
+        return false;
     }
 
-    std::cout << string_from_bits( b, e ) << "\n";
+    if (!bytes_from_bits( b, slash, result.data ))
+    {
+        if (!silent)
+            std::cout << "Cannot parse content\n";
+        return false;
+    }
 
-    return nullptr;
+    std::vector<uint8_t> checksum;
+    if (!bytes_from_bits( slash+8, eos, checksum ))
+    {
+        if (!silent)
+            std::cout << "Cannot parse checksum\n";
+        return false;
+    }
+
+    result.id = result.data[0];
+    result.adrs = result.data[1]+((uint16_t)result.data[2])*256;
+    result.checksum = checksum[0]+((uint16_t)checksum[1])*256;
+
+    // std::cout << "CHK:" << result.compute_checksum() << " vs " << result.checksum << "\n";
+
+    if (result.compute_checksum()!=result.checksum)
+    {
+        if (!silent)
+            std::cout << "Wrong checksum value\n";
+        return false;
+    }
+
+    // for (auto b:result.data)
+    //     std::cout << (int)b << " ";
+    // std::cout << "\n";
+
+    return true;
 }
 
 void parse( const std::vector<sample_t> data, std::string patch )
 {
-        //  Should check patch content better
-    if (patch=="")
-        patch="1";
-
     Parser p;
     for (auto s:data)
         p.add( s );
@@ -480,19 +578,39 @@ void parse( const std::vector<sample_t> data, std::string patch )
 
     // auto start = kim_data_from_bits( p.result );
 
-    if (p.fixes.size()>0)
+    auto bs =p.get_bitstream();
+    std::cout << bs.fix_count() << "\n";
+
+        //  we patch according to user specs
+    bs.patch( patch );
+
+        //  we interate all the solutions
+    std::cout << "Generating " << bs.fix_count() << " combinations\n";
+    for (size_t i=0;i!=bs.fix_count();i++)
     {
-        std::cout << "Location in bitstream for corrupted segments:\n";
-        for (int i=0;i!=p.fixes.size();i++)
+        auto bits = bs.bits( i );
+        kim_data kd;
+        if (kim_data_from_bits( bits, kd ))
         {
-            auto f = p.fixes[i];
-            bool bit = patch[i%patch.size()]=='1';
-            std::cout << "  " << from_time( f.timestamp ) << "-" << from_time( f.timestamp+7.452/1000 ) << " -- bit #" << f.bit_location << " inserted " << bit << "\n";
-            p.result[p.fixes[i].bit_location] = bit;
+            std::cout << "Found parsable data with correct checksum:\n";
+            kd.dump();
+            return ;
         }
     }
 
-    kim_data_from_bits( p.result );
+// exit(0);
+
+//     if (bs.errors()>0)
+//     {
+//         std::cout << "Location in bitstream for corrupted segments:\n";
+//         for (int i=0;i!=p.fixes.size();i++)
+//         {
+//             auto f = p.fixes[i];
+//             bool bit = patch[i%patch.size()]=='1';
+//             std::cout << "  " << from_time( f.timestamp ) << "-" << from_time( f.timestamp+7.452/1000 ) << " -- bit #" << f.bit_location << " inserted " << bit << "\n";
+//             p.result[p.fixes[i].bit_location] = bit;
+//         }
+    // }
 }
 
 
