@@ -579,7 +579,7 @@ void parse( const std::vector<sample_t> data, std::string patch )
     // auto start = kim_data_from_bits( p.result );
 
     auto bs =p.get_bitstream();
-    std::cout << bs.fix_count() << "\n";
+    // std::cout << bs.fix_count() << "\n";
 
         //  we patch according to user specs
     bs.patch( patch );
