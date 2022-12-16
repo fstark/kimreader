@@ -26,6 +26,134 @@ bool verbose = false;
 
 typedef uint8_t sample_t;
 
+/// @brief Compare bits starting at b to find if they match the 'bits' pattern
+/// @return true if bits found
+template <class I>
+bool compare_bits( I b, I e, const std::vector<bool> &bits )
+{
+    if (e-b<bits.size())
+        return false;
+    for (auto bit:bits)
+        if (*b++!=bit)
+            return false;
+    return true;
+}
+
+/// @brief starting at b, scans to find the bits with the specified stride
+/// @return 
+template <class I>
+I find_bits( I b, I e, const std::vector<bool> &bits, size_t stride = 1 )
+{
+    while (e-b>=bits.size())
+    {   if (compare_bits(b,b+bits.size(),bits))
+            return b;
+        b += stride;
+    }
+    return e;   
+}
+
+
+/// @brief  This is a bitstream, with potentially some unknown bits (but we know where they are)
+class bitstream
+{
+    std::vector<bool> bits_;
+    std::vector<size_t> errors_;
+
+public:
+    bitstream( const std::vector<bool> &bits, const std::vector<size_t> &errors )
+        : bits_{ bits }, errors_{ errors }
+    {
+    }
+
+    /// @brief How many different ways to "fix" the bitstream
+    /// @return The number of different values that the 'bits' member function can take
+    size_t fix_count() const
+    {
+        return 1<<errors_.size();
+    }
+
+    /// @brief Returns the bits with a certain fix
+    /// @param fix a number between 0 and fix_count()-1 that defines how to fill the missing bits 
+    /// @return a vector of bits with no unknown bits
+    std::vector<bool> bits( size_t fix ) const
+    {
+        assert( fix<fix_count() );
+
+        std::vector<bool> result;
+        size_t ix = 0;
+
+        result = bits_;
+
+        for (auto e:errors_)
+            result[e] = fix&(1<<ix++);
+
+        return result;
+    }
+
+    bitstream slice( size_t start, size_t len ) const
+    {
+        assert( start+len<=bits_.size() );
+
+        std::vector<size_t> errors;
+        for (auto e:errors_)
+            if (e>=start && e<start+len)
+                errors.push_back( e-start );
+
+        return bitstream( std::vector<bool>{ std::begin(bits_)+start, std::begin(bits_)+start+len }, errors );
+    }
+
+    /// @brief Find the position of the char in the steam of bits. Use little endian bits coding.
+    /// @return the bit position where we found the bit pattern
+    size_t index_of( uint8_t c, bool &found, size_t after=0, size_t stride=1 ) const
+    {
+        std::vector<bool> bits;
+        for (size_t i=0;i!=8;i++)
+            bits.push_back( c&(1<<i) );
+
+        // for (auto b:bits)
+        // {
+        //     std::cout << (int)b;;
+        // }
+        // std::cout << "\n";
+
+        auto res = find_bits( std::begin(bits_), std::end(bits_), bits, stride );
+        if (res==std::end(bits_))
+        {
+            found = false;
+            return 0;
+        }
+
+        found = true;
+        return res-std::begin(bits_);
+    }
+};
+
+void test_bitstream()
+{
+    bitstream b0{ { 0, 0, 0, 0 }, { 2 } };
+    assert( b0.fix_count()==2 );
+    assert( (b0.bits(0)==std::vector<bool>{ 0, 0, 0, 0 }) );
+    assert( (b0.bits(1)==std::vector<bool>{ 0, 0, 1, 0 }) );
+
+    bitstream b1{ { 1, 0, 1, 0 }, { 1, 3 } };
+    assert( b1.fix_count()==4 );
+    assert( (b1.bits(0)==std::vector<bool>{ 1, 0, 1, 0 }) );
+    assert( (b1.bits(1)==std::vector<bool>{ 1, 1, 1, 0 }) );
+    assert( (b1.bits(2)==std::vector<bool>{ 1, 0, 1, 1 }) );
+    assert( (b1.bits(3)==std::vector<bool>{ 1, 1, 1, 1 }) );
+
+    bitstream b2{ { 0, 0, 0, 0, 0, 0 }, { 1, 3, 5 } };
+    auto b3 = b2.slice( 1, 3 );
+    assert( b3.fix_count()==4 );
+    assert( (b3.bits(3)==std::vector<bool>{ 1, 0, 1 }) );
+
+    bitstream b4{ { 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0 }, {} };
+    bool found;
+    auto r4 = b4.index_of( 0x04, found );
+    assert( found );
+    assert( r4==4 );
+}
+
 typedef enum
 {
     k3700, k2400
@@ -187,35 +315,99 @@ std::string string_from_bits( std::vector<bool>::const_iterator b, const std::ve
     return result;
 }
 
-// struct kim_data
-// {
-//     uint8_t id;
-//     uint16_t adrs;
-//     std::vector<uint8_t> data;
-//     uint16_t checksum;
-// };
-
-template <class I>
-bool compare_bits( I b, I e, const std::vector<bool> &bits )
+std::vector<uint8_t> ascii_hex_from_bits( std::vector<bool>::const_iterator b, const std::vector<bool>::const_iterator e )
 {
-    if (e-b<bits.size())
-        return false;
-    for (auto bit:bits)
-        if (*b++!=bit)
-            return false;
+    uint8_t ch;
+    int bit_ix=0;
+    std::vector<uint8_t> result;
+
+    while (b!=e)
+    {
+        ch/=2;
+        if (*b++) ch += 128;
+        bit_ix++;
+        if (bit_ix==8)
+        {
+            bit_ix = 0;
+            result.push_back( ch );
+        }
+    }
+
+    return result;
+}
+
+bool byte_from_hex1( char c, uint8_t &result )
+{
+    if (c>='0' && c<='9')
+    {
+        result = c-'0';
+        return true;
+    }
+
+    if (c>='A' && c<='F')
+    {
+        result = c-'A'+10;
+        return true;
+    }
+
+    std::cout << "BYTE IS NOT HEX\n\n\n";
+
+    return false;
+}
+
+bool byte_from_hex2( char c1, char c2, uint8_t &result )
+{
+    uint8_t r1, r2;
+
+    if (!byte_from_hex1( c1, r1 )) return false;
+    if (!byte_from_hex1( c2, r2 )) return false;
+
+    result = r1*16+r2;
+
     return true;
 }
 
-template <class I>
-I find_bits( I b, I e, const std::vector<bool> &bits )
+bool bytes_from_ascii_hex( std::vector<uint8_t>::const_iterator b, const std::vector<uint8_t>::const_iterator e, std::vector<uint8_t> &result )
 {
-    while (e-b>=bits.size())
-    {   if (compare_bits(b,b+bits.size(),bits))
-            return b;
-        b++;
+    if ((e-b)%2!=0)
+    {
+        std::cerr << "NOT ASCII\n";
+        return false;
     }
-    return e;   
+    while (b<e)
+    {
+        uint8_t curr;
+        if (!byte_from_hex2( b[0], b[1], curr ))
+            return false;
+        result.push_back( curr );
+        std::cout << "[" << (int)curr << "]";
+        b += 2;
+    }
+
+    return true;
 }
+
+bool bytes_from_bits( std::vector<bool>::const_iterator b, const std::vector<bool>::const_iterator e, std::vector<uint8_t> &result )
+{
+    if ((e-b)%16!=0)
+    {
+        std::cerr << "bits not multiples of 16\n";
+        return false;
+    }
+
+    auto hex = ascii_hex_from_bits( b, e );
+    bytes_from_ascii_hex( std::begin(hex), std::end(hex), result );
+
+    return true;
+}
+
+struct kim_data
+{
+     uint8_t id;
+     uint16_t adrs;
+     std::vector<uint8_t> data;
+     uint16_t checksum;
+};
 
 std::unique_ptr<char * /*kim_data*/> kim_data_from_bits( const std::vector<bool> &encoded )
 {
@@ -240,6 +432,30 @@ loop:
         goto loop;  //  evil
 
     b += 8;
+
+    //  We are at the start of the data
+
+    //  Look for the '/' 0x2f '00101111'
+    auto slash = find_bits( b, e, { true, true, true, true, false, true, false, false }, 8 );
+    if (slash==e)
+    {
+        std::cerr << "'/ not found\n";
+        return nullptr;
+    }
+
+    //  Look for the EOF 0x04 '00000100'
+    auto eos = find_bits( slash, e, { false, false, true, false, false, false, false, false }, 8 );
+    if (eos==e)
+    {
+        std::cerr << "EOS not found\n";
+        return nullptr;
+    }
+
+    std::vector<uint8_t> bytes;
+    if (!bytes_from_bits( b, slash, bytes ))
+    {
+        std::cout << "Cannot parse\n";
+    }
 
     std::cout << string_from_bits( b, e ) << "\n";
 
@@ -348,6 +564,8 @@ int main(int argc, char* argv[])
 {
     int smooth = 0;
     const char *file_name = "input.wav";
+
+    test_bitstream();
 
     std::string patch;
 
