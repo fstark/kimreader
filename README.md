@@ -4,7 +4,7 @@ Recovers content of KIM-1 save tapes from audio recordings.
 
 ## What is this thing?
 
-This is a tool developed for the [MO5.com association](https://mo5.com/site/) to preserve some old KIM-1 software stored on damaged tapes.
+This is a tool developed by the [MO5.com association](https://mo5.com/site/) to preserve some old KIM-1 software stored on damaged tapes.
 
 If you have an unreadable KIM-1 tape, you may be able to recover it, by using the following steps:
 
