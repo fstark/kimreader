@@ -1,0 +1,322 @@
+./kimreader '/home/fred/Dropbox/Documents/Books/Retro Computing/JMJ/Release/P1.wav' --bytestream 3
+=> file truncated
+
+./kimreader '/home/fred/Dropbox/Documents/Books/Retro Computing/JMJ/Release/P2.wav'
+=> complete, data + code
+
+code starts at offset 200
+
+...
+
+P4, quasi identical to P2
+
+opinion:
+
+
+./kimreader '/home/fred/Dropbox/Documents/Books/Retro Computing/JMJ/Release/P10.wav' --bytestream 5
+
+
+0200: A9 02 8D E5 17 A9 02 8D
+0208: E6 17 A9 00 8D E4 17 A9
+0210: 00 8D E3 17 A2 01 AD E4
+0218: 17 A8 B9 A5 00 9D 2F 03
+0220: 9D 38 03 9D 3E 03 9D D6
+0228: 03 CA EE E4 17 AD E4 17
+0230: CD E6 17 D0 E1 AD E6 17
+0238: 18 69 02 8D E6 17 AD E3
+0240: 17 A8 B9 D6 00 8D E2 17
+0248: EE E3 17 C9 00 F0 03 4C
+0250: 55 02 4C 0B 03 A9 02 85
+0258: EE A9 01 8D 01 17 A9 FF
+0260: 8D 03 17 A9 04 8D 02 17
+0268: 2E 02 17 6E 02 17 A2 00
+0270: 20 2B 03 20 23 03 A5 EE
+0278: 18 69 02 85 EE A5 EE C9
+0280: 22 D0 ED A9 29 85 EE A2
+0288: 20 20 2B 03 A9 24 8D 02
+0290: 17 A9 01 8D 00 17 4C 22
+0298: 1C CE E2 17 D0 03 4C 0B
+02A0: 03 18 A9 7F 8D 01 17 AD
+02A8: 00 17 8D E1 17 2E E1 17
+02B0: B0 03 4C 55 02 A2 00 A9
+02B8: FD 8D 01 17 20 63 03 A9
+02C0: 00 8D 00 17 18 A0 04 2E
+02C8: 00 17 20 46 03 88 D0 F7
+02D0: AD 00 17 8D E0 17 2E E0
+02D8: 17 20 46 03 A0 06 2E E0
+02E0: 17 88 D0 FA 18 AD E0 17
+02E8: 6D E0 17 8D E0 17 AC E0
+02F0: 17 E8 88 D0 FC A9 02 8D
+02F8: DF 17 20 78 03 CE DF 17
+0300: E8 AD DF 17 C9 00 D0 F2
+0308: 4C 55 02 CE E5 17 D0 09
+0310: A9 04 8D 02 17 4C 00 02
+0318: 99 4C 14 02 EE 02 17 CE
+0320: 02 17 60 18 6E 02 17 2E
+0328: 02 17 60 A0 08 18 BD 29
+0330: 00 8D 00 17 20 1C 03 7E
+0338: 29 00 88 D0 F1 7E 29 00
+0340: E8 E4 EE D0 E6 60 A9 04
+0348: 8D 02 17 A9 00 8D 02 17
+0350: 60 18 A9 40 6D 00 17 8D
+0358: 00 17 A9 C0 6D 00 17 8D
+0360: 00 17 60 A9 10 8D 02 17
+0368: A9 14 8D 02 17 A9 10 8D
+0370: 02 17 A9 00 8D 02 17 60
+0378: A9 FB 8D 01 17 A9 00 8D
+0380: 00 17 18 A0 08 AD 00 17
+0388: 8D DE 17 A9 00 8D DD 17
+0390: AD DD 17 C9 00 D0 26 18
+0398: 6E DE 17 B0 18 A9 00 8D
+03A0: DD 17 20 51 03 AD 00 17
+03A8: 18 6D DE 17 8D DE 17 88
+03B0: D0 DE 4C C1 03 A9 01 8D
+03B8: DD 17 4C A2 03 38 4C 98
+03C0: 03 18 AD DD 17 C9 00 D0
+03C8: 10 18 A0 03 6E DE 17 88
+03D0: D0 FA AD DE 17 9D 29 00
+03D8: 60 38 4C CA 03
+
+VAR0 = $17e0
+
+VAR1 = $17e1
+VAR2 = $17e2
+VAR3 = $17e3
+VAR4 = $17e4
+VAR5 = $17e5
+VAR6 = $17e6
+
+LOOP01 = $216
+
+IO0 = $1700
+IO1 = $1701
+IO2 = $1702
+IO3 = $1703
+
+ZP0 = $EE
+
+RST = $1C22
+XXXXXXX0 = $17dd
+XXXXXXX1 = $17de
+XXXXXXX2 = $17df
+
+.DATA $318
+
+FUNC0 = $031C
+FUNC1 = $0323
+FUNC2 = $032B
+FUNC3 = $0346
+FUNC4 = $0351
+FUNC5 = $0363
+FUNC6 = $0378
+
+
+
+
+0279   69 02                ADC #$02
+027B   85 EE                STA ZP0
+027D   A5 EE                LDA ZP0
+027F   C9 22                CMP #$22
+0281   D0 ED                BNE L0270
+0283   A9 29                LDA #$29
+0285   85 EE                STA ZP0
+0287   A2 20                LDX #$20
+0289   20 2B 03             JSR FUNC2
+028C   A9 24                LDA #$24
+028E   8D 02 17             STA IO2
+0291   A9 01                LDA #$01
+0293   8D 00 17             STA IO0
+0296   4C 22 1C             JMP RST
+0299   CE E2 17             DEC VAR2
+029C   D0 03                BNE L02A1
+029E   4C 0B 03             JMP L030B
+02A1   18         L02A1     CLC
+02A2   A9 7F                LDA #$7F
+02A4   8D 01 17             STA IO1
+02A7   AD 00 17             LDA IO0
+02AA   8D E1 17             STA VAR1
+02AD   2E E1 17             ROL VAR1
+02B0   B0 03                BCS L02B5
+02B2   4C 55 02             JMP L0255
+02B5   A2 00      L02B5     LDX #$00
+02B7   A9 FD                LDA #$FD
+02B9   8D 01 17             STA IO1
+02BC   20 63 03             JSR FUNC5
+02BF   A9 00                LDA #$00
+02C1   8D 00 17             STA IO0
+02C4   18                   CLC
+02C5   A0 04                LDY #$04
+02C7   2E 00 17   L02C7     ROL IO0
+02CA   20 46 03             JSR FUNC3
+02CD   88                   DEY
+02CE   D0 F7                BNE L02C7
+02D0   AD 00 17             LDA IO0
+02D3   8D E0 17             STA VAR0
+02D6   2E E0 17             ROL VAR0
+02D9   20 46 03             JSR FUNC3
+02DC   A0 06                LDY #$06
+02DE   2E E0 17   L02DE     ROL VAR0
+02E1   88                   DEY
+02E2   D0 FA                BNE L02DE
+02E4   18                   CLC
+02E5   AD E0 17             LDA VAR0
+02E8   6D E0 17             ADC VAR0
+02EB   8D E0 17             STA VAR0
+02EE   AC E0 17             LDY VAR0
+02F1   E8         L02F1     INX
+02F2   88                   DEY
+02F3   D0 FC                BNE L02F1
+02F5   A9 02                LDA #$02
+02F7   8D DF 17             STA XXXXXXX2
+02FA   20 78 03   L02FA     JSR FUNC6
+02FD   CE DF 17             DEC XXXXXXX2
+0300   E8                   INX
+0301   AD DF 17             LDA XXXXXXX2
+0304   C9 00                CMP #$00
+0306   D0 F2                BNE L02FA
+0308   4C 55 02             JMP L0255
+030B   CE E5 17   L030B     DEC VAR5
+030E   D0 09                BNE L0319
+0310   A9 04                LDA #$04
+0312   8D 02 17             STA IO2
+0315   4C 00 02             JMP START
+0318   99                   BYTE               ;10011001
+0319   4C 14 02   L0319     JMP $0214
+031C   EE 02 17   FUNC0     INC IO2
+031F   CE 02 17             DEC IO2
+0322   60                   RTS
+0323   18         FUNC1     CLC
+0324   6E 02 17             ROR IO2
+0327   2E 02 17             ROL IO2
+032A   60                   RTS
+032B   A0 08      FUNC2     LDY #$08
+032D   18                   CLC
+032E   BD 29 00   L032E     LDA $0029,X
+0331   8D 00 17             STA IO0
+0334   20 1C 03             JSR FUNC0
+0337   7E 29 00             ROR $0029,X
+033A   88                   DEY
+033B   D0 F1                BNE L032E
+033D   7E 29 00             ROR $0029,X
+0340   E8                   INX
+0341   E4 EE                CPX ZP0
+0343   D0 E6                BNE FUNC2
+0345   60                   RTS
+0346   A9 04      FUNC3     LDA #$04
+0348   8D 02 17             STA IO2
+034B   A9 00                LDA #$00
+034D   8D 02 17             STA IO2
+0350   60                   RTS
+0351   18         FUNC4     CLC
+0352   A9 40                LDA #$40
+0354   6D 00 17             ADC IO0
+0357   8D 00 17             STA IO0
+035A   A9 C0                LDA #$C0
+035C   6D 00 17             ADC IO0
+035F   8D 00 17             STA IO0
+0362   60                   RTS
+0363   A9 10      FUNC5     LDA #$10
+0365   8D 02 17             STA IO2
+0368   A9 14                LDA #$14
+036A   8D 02 17             STA IO2
+036D   A9 10                LDA #$10
+036F   8D 02 17             STA IO2
+0372   A9 00                LDA #$00
+0374   8D 02 17             STA IO2
+0377   60                   RTS
+0378   A9 FB      FUNC6     LDA #$FB
+037A   8D 01 17             STA IO1
+037D   A9 00                LDA #$00
+037F   8D 00 17             STA IO0
+0382   18                   CLC
+0383   A0 08                LDY #$08
+0385   AD 00 17             LDA IO0
+0388   8D DE 17             STA XXXXXXX1
+038B   A9 00                LDA #$00
+038D   8D DD 17             STA XXXXXXX0
+0390   AD DD 17   L0390     LDA XXXXXXX0
+0393   C9 00                CMP #$00
+0395   D0 26                BNE L03BD
+0397   18                   CLC
+0398   6E DE 17   L0398     ROR XXXXXXX1
+039B   B0 18                BCS L03B5
+039D   A9 00                LDA #$00
+039F   8D DD 17             STA XXXXXXX0
+03A2   20 51 03   L03A2     JSR FUNC4
+03A5   AD 00 17             LDA IO0
+03A8   18                   CLC
+03A9   6D DE 17             ADC XXXXXXX1
+03AC   8D DE 17             STA XXXXXXX1
+03AF   88                   DEY
+03B0   D0 DE                BNE L0390
+03B2   4C C1 03             JMP L03C1
+03B5   A9 01      L03B5     LDA #$01
+03B7   8D DD 17             STA XXXXXXX0
+03BA   4C A2 03             JMP L03A2
+03BD   38         L03BD     SEC
+03BE   4C 98 03             JMP L0398
+03C1   18         L03C1     CLC
+03C2   AD DD 17             LDA XXXXXXX0
+03C5   C9 00                CMP #$00
+03C7   D0 10                BNE L03D9
+03C9   18                   CLC
+03CA   A0 03      L03CA     LDY #$03
+03CC   6E DE 17   L03CC     ROR XXXXXXX1
+03CF   88                   DEY
+03D0   D0 FA                BNE L03CC
+03D2   AD DE 17             LDA XXXXXXX1
+03D5   9D 29 00             STA $0029,X
+03D8   60                   RTS
+03D9   38         L03D9     SEC
+03DA   4C CA 03             JMP L03CA
+                            .END
+
+;auto-generated symbols and labels
+ L0252      $0252
+ L0255      $0255
+ L030B      $030B
+ L0270      $0270
+ L02A1      $02A1
+ L02B5      $02B5
+ L02C7      $02C7
+ L02DE      $02DE
+ L02F1      $02F1
+ L02FA      $02FA
+ L0319      $0319
+ L032E      $032E
+ L03BD      $03BD
+ L03B5      $03B5
+ L0390      $0390
+ L03C1      $03C1
+ L03A2      $03A2
+ L0398      $0398
+ L03D9      $03D9
+ L03CC      $03CC
+ L03CA      $03CA
+
+;defined symbols used as labels
+ IO0        $1700
+ IO1        $1701
+ IO2        $1702
+ IO3        $1703
+ LOOP01     $0216
+ FUNC2      $032B
+ FUNC1      $0323
+ FUNC5      $0363
+ FUNC3      $0346
+ FUNC6      $0378
+ START      $0200
+ FUNC0      $031C
+ FUNC4      $0351
+ VAR0       $17E0
+ VAR1       $17E1
+ VAR2       $17E2
+ VAR3       $17E3
+ VAR4       $17E4
+ VAR5       $17E5
+ VAR6       $17E6
+ ZP0          $EE
+ RST        $1C22
+ XXXXXXX0   $17DD
+ XXXXXXX1   $17DE
+ XXXXXXX2   $17DF

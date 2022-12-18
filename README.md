@@ -43,3 +43,16 @@ Use ``kimreader --help`` for command-line help.
 About the smooth argument: using ``--smooth 30`` will rescale every sample into a 0-255 range according to the min/max and average in a surrounding window of (for instance) 71 samples. This enables signals that are low and uncentered to be recognised as crossing the 128 line. This is badly coded and fundamentally makes the software 30 times slower.
 
 Using ``--silent false`` option you can see the bitstream ``kimreader`` recovered (sometimes kimdreader can recover the bitstream but not turn it into a working kim tape)
+
+## Notes on kim-1 tapes
+
+bits are stored little endian
+3 cycles per bits, cycles are 996 (0) or 966 (1)
+-> each bits ends up in a 6->9 transition
+
+recording starts with 100 times 01101000
+00010110
+
+0x16
+
+
