@@ -476,6 +476,19 @@ struct kim_data
         printf( "\n" );
     }
 
+    bool operator==( const kim_data &other ) const
+    {
+        if (id!=other.id)
+            return false;
+        if (adrs!=other.adrs)
+            return false;
+        if (data!=other.data)
+            return false;
+        if (checksum!=other.checksum)
+            return false;
+        return true;
+    }
+
 };
 
 bool kim_data_from_bits( const std::vector<bool> &encoded, kim_data &result )
@@ -566,6 +579,7 @@ loop:
 
 void parse( const std::vector<sample_t> data, std::string patch )
 {
+    std::vector<kim_data> matches;
     Parser p;
     for (auto s:data)
         p.add( s );
@@ -592,9 +606,16 @@ void parse( const std::vector<sample_t> data, std::string patch )
         kim_data kd;
         if (kim_data_from_bits( bits, kd ))
         {
-            std::cout << "Found parsable data with correct checksum:\n";
-            kd.dump();
-            return ;
+            bool found = false; // ### use std::algo!
+            for (auto &k:matches)
+                if (k==kd)
+                    found = true;
+            if (!found)
+            {
+                matches.push_back( kd );
+                std::cout << "Found parsable data with correct checksum:\n";
+                kd.dump();
+            }
         }
     }
 
