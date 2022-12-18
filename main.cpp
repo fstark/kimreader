@@ -25,6 +25,34 @@ std::string from_time( double t )
 bool silent = true;
 bool verbose = false;
 
+
+
+/// #### Bads name, this is just byte_from_le_bits
+std::vector<uint8_t> ascii_hex_from_bits( std::vector<bool>::const_iterator b, const std::vector<bool>::const_iterator e )
+{
+    uint8_t ch;
+    int bit_ix=0;
+    std::vector<uint8_t> result;
+
+    while (b!=e)
+    {
+        ch/=2;
+        if (*b++) ch += 128;
+        bit_ix++;
+        if (bit_ix==8)
+        {
+            bit_ix = 0;
+            result.push_back( ch );
+        }
+    }
+
+    return result;
+}
+
+
+
+
+
 typedef uint8_t sample_t;
 
 /// @brief Compare bits starting at b to find if they match the 'bits' pattern
@@ -168,6 +196,70 @@ public:
             }
 
             errors_ = new_errors;
+        }
+    }
+
+    void dump_binary( size_t offset = 0 ) const
+    {
+        int c = 0;
+
+        for (auto b:bits_)
+        {
+            c++;
+            printf( "%c", b?'0':'1' );
+            if (c%8==0)
+                printf( " " );
+            if (c%64==0)
+                printf( "\n" );
+        }
+        printf( "\n" );
+    }
+
+    void dump_hexa( size_t offset = 0 ) const
+    {
+        auto b = std::begin( bits_);
+        auto e = std::end( bits_);
+
+        while (b<e && offset)
+        {
+            b++;
+            offset--;
+        }
+
+        auto e0 = b;
+
+        while (e0<e)
+            e0 += 8;
+
+        auto bytes = ascii_hex_from_bits( b, e0 );
+
+        for (int i=0;i<bytes.size();i+=16)
+        {
+            printf ( "%04X:", i );
+
+            for (int j=0;j!=16;j++)
+            {
+                if (i+j<bytes.size())
+                    printf( " %02X", bytes[i+j] );
+                else
+                    printf( "   " );
+                if ((j%4)==3)
+                    printf( " " );
+            }
+
+            printf( ": " );
+
+            for (int j=0;j!=16;j++)
+                if (i+j<bytes.size())
+                {
+                    if (::isgraph(bytes[i+j]))
+                        printf( "%c", bytes[i+j] );
+                    else
+                        printf( "." );
+                    if ((j%4)==3)
+                        printf( " " );
+                }
+            printf( "\n" );
         }
     }
 
@@ -345,27 +437,6 @@ std::string string_from_bits( std::vector<bool>::const_iterator b, const std::ve
     uint8_t ch;
     int bit_ix=0;
     std::string result;
-
-    while (b!=e)
-    {
-        ch/=2;
-        if (*b++) ch += 128;
-        bit_ix++;
-        if (bit_ix==8)
-        {
-            bit_ix = 0;
-            result.push_back( ch );
-        }
-    }
-
-    return result;
-}
-
-std::vector<uint8_t> ascii_hex_from_bits( std::vector<bool>::const_iterator b, const std::vector<bool>::const_iterator e )
-{
-    uint8_t ch;
-    int bit_ix=0;
-    std::vector<uint8_t> result;
 
     while (b!=e)
     {
@@ -577,6 +648,11 @@ loop:
     return true;
 }
 
+bool dump_bitstream = false;
+
+bool dump_bytestream = false;
+int dump_bytestream_offset = 0;
+
 void parse( const std::vector<sample_t> data, std::string patch )
 {
     std::vector<kim_data> matches;
@@ -594,6 +670,13 @@ void parse( const std::vector<sample_t> data, std::string patch )
 
     auto bs =p.get_bitstream();
     // std::cout << bs.fix_count() << "\n";
+
+    if (dump_bitstream)
+        bs.dump_binary();
+
+//  If we dump the bitstream
+    if (dump_bytestream)
+        bs.dump_hexa( dump_bytestream_offset );
 
         //  we patch according to user specs
     bs.patch( patch );
@@ -715,11 +798,14 @@ int main(int argc, char* argv[])
     {
         if (!strcmp(*argv,"--help"))
         {
-            std::cerr << "kimreader [--silent true|false] [--verbose true|false] [--smooth <NUM>] file.wav\n";
-            std::cerr << " '*' : got an zero crossing that is not 2400Hz or 3700Hz\n";
-            std::cerr << " '?' : got a transition from 2400Hz to 3700Hz that is not in a 9-9-6 or 9-6-6 pattern\n";
-            std::cerr << " '#' : inserting an unknown bit\n";
-            std::cerr << "       (insertion is only done *after* a first know bit is found, and only if followed by a known bit)\n";
+            std::cerr << "kimreader [--silent true|false] [--verbose true|false] [--smooth <NUM>] [--bitstream] [--bytestream offset] file.wav\n";
+            std::cerr << "  --bitstream: dumps the bitstream (with error replaced by zeros)\n";
+            std::cerr << "  --bytestream OFFSET: transform the bitstream into bytes, skipping offset bits\n";
+            std::cerr << "  silent false mode:\n";
+            std::cerr << "  '*' : got an zero crossing that is not 2400Hz or 3700Hz\n";
+            std::cerr << "  '?' : got a transition from 2400Hz to 3700Hz that is not in a 9-9-6 or 9-6-6 pattern\n";
+            std::cerr << "  '#' : inserting an unknown bit\n";
+            std::cerr << "        (insertion is only done *after* a first know bit is found, and only if followed by a known bit)\n";
             return EXIT_FAILURE;
         }
         else if (!strcmp(*argv,"--smooth"))
@@ -739,6 +825,17 @@ int main(int argc, char* argv[])
             argc--;
             argv++;
             verbose = ::bool_from_string( *argv );
+        }
+        else if (!strcmp(*argv,"--bitstream"))
+        {
+            dump_bitstream = true;
+        }
+        else if (!strcmp(*argv,"--bytestream"))
+        {
+            argc--;
+            argv++;
+            dump_bytestream = true;
+            dump_bytestream_offset = ::atoi( *argv );
         }
         else if (!strcmp(*argv,"--patch"))
         {
