@@ -8,6 +8,13 @@
 #include <cstring>
 #include <cassert>
 
+using namespace std::string_literals;
+
+bool flag_write_data = false;
+bool flag_write_kim = false;
+bool flag_write_bits = false;
+bool flag_write_wav = false;
+
 std::string from_time( double t )
 {
     int s = t;
@@ -172,24 +179,24 @@ public:
             if (patch_instuctions=="")
                 patch_instuctions = "x";
 
-            std::cout << "Location in bitstream for corrupted segments:\n";
+            std::clog << "Location in bitstream for corrupted segments:\n";
             for (int i=0;i!=errors_.size();i++)
             {
                 auto e = errors_[i];
-                std::cout << "  " << from_time( e.source_ts ) << "-" << from_time( e.source_ts+7.452/1000 ) << " -- bit #" << e.bit_location;
+                std::clog << "  " << from_time( e.source_ts ) << "-" << from_time( e.source_ts+7.452/1000 ) << " -- bit #" << e.bit_location;
                 switch (patch_instuctions[i%patch_instuctions.size()])
                 {
                     case '0':
                         bits_[e.bit_location] = 0;
-                        std::cout << " inserted 0\n";
+                        std::clog << " inserted 0\n";
                         break;
                     case '1':
                         bits_[e.bit_location] = 1;
-                        std::cout << " inserted 1\n";
+                        std::clog << " inserted 1\n";
                         break;
                     case 'x':
                         bits_[e.bit_location] = 1;
-                        std::cout << " unchanged\n";
+                        std::clog << " unchanged\n";
                         new_errors.push_back( e );
                         break;
                 }
@@ -206,13 +213,13 @@ public:
         for (auto b:bits_)
         {
             c++;
-            printf( "%c", b?'0':'1' );
+            fprintf( stderr, "%c", b?'0':'1' );
             if (c%8==0)
-                printf( " " );
+                fprintf( stderr, " " );
             if (c%64==0)
-                printf( "\n" );
+                fprintf( stderr, "\n" );
         }
-        printf( "\n" );
+        fprintf( stderr, "\n" );
     }
 
     void dump_hexa( size_t offset = 0 ) const
@@ -235,31 +242,31 @@ public:
 
         for (int i=0;i<bytes.size();i+=16)
         {
-            printf ( "%04X:", i );
+            fprintf( stderr, "%04X:", i );
 
             for (int j=0;j!=16;j++)
             {
                 if (i+j<bytes.size())
-                    printf( " %02X", bytes[i+j] );
+                    fprintf( stderr,  " %02X", bytes[i+j] );
                 else
-                    printf( "   " );
+                    fprintf( stderr, "   " );
                 if ((j%4)==3)
-                    printf( " " );
+                    fprintf( stderr, " " );
             }
 
-            printf( ": " );
+            fprintf( stderr, ": " );
 
             for (int j=0;j!=16;j++)
                 if (i+j<bytes.size())
                 {
                     if (::isgraph(bytes[i+j]))
-                        printf( "%c", bytes[i+j] );
+                        fprintf( stderr, "%c", bytes[i+j] );
                     else
-                        printf( "." );
+                        fprintf( stderr, "." );
                     if ((j%4)==3)
-                        printf( " " );
+                        fprintf( stderr, " " );
                 }
-            printf( "\n" );
+            fprintf( stderr, "\n" );
         }
     }
 
@@ -327,7 +334,7 @@ struct Parser
             while (time-last_valid_bit>10.0/1000)
             {
                 if (!silent)
-                    std::cout << "#";
+                    std::clog << "#";
                     //  We insert an arbitrary bit
                 fixes.push_back( { result.size(), last_valid_bit } );
                 result.push_back( 1 );
@@ -339,8 +346,8 @@ struct Parser
         result.push_back( bit );
         if (!silent)
         {
-            std::cout << bit;
-            // std::cout << "(" << from_time(time) << ") ";
+            std::clog << bit;
+            // std::clog << "(" << from_time(time) << ") ";
         }
     }
 
@@ -351,7 +358,7 @@ struct Parser
     void add_pulse( bool is_6 )
     {
         counter[is_6]++;
-        // std::cout << (is_6_?"6":"9");
+        // std::clog << (is_6_?"6":"9");
         if (is_6_ && !is_6)
         {
             int c9 = counter[false];
@@ -367,9 +374,9 @@ struct Parser
             {
                 //  We were unable to find if this is a 0 or a 1
                 if (verbose)
-                    std::cout << "? (" << from_time(time) << " " << counter[false] << "/" << counter[true] << ")";
+                    std::clog << "? (" << from_time(time) << " " << counter[false] << "/" << counter[true] << ")";
                 else
-                    if (!silent) std::cout << "?";
+                    if (!silent) std::clog << "?";
 
                 // //  We add a '0' anyway
                 // add_bit( 0 );
@@ -399,11 +406,11 @@ struct Parser
         {
             //  We have a zero crossing that is not of the correct frequency
             if (verbose)
-                std::cout << "\nZERO CROSSING AT " << from_time(time) << " : width = " << w <<
+                std::clog << "\nZERO CROSSING AT " << from_time(time) << " : width = " << w <<
                 " 9 = [" << width_9-width_epsilon << "-" << width_9+width_epsilon << "] "
                 " 6 = [" << width_6-width_epsilon << "-" << width_6+width_epsilon << "]\n";
             else
-                if (!silent) std::cout << "*";
+                if (!silent) std::clog << "*";
         }
     }
 
@@ -499,7 +506,7 @@ bool bytes_from_ascii_hex( std::vector<uint8_t>::const_iterator b, const std::ve
         if (!byte_from_hex2( b[0], b[1], curr ))
             return false;
         result.push_back( curr );
-        // std::cout << "[" << (int)curr << "]";
+        // std::clog << "[" << (int)curr << "]";
         b += 2;
     }
 
@@ -526,7 +533,7 @@ struct kim_data
     std::vector<uint8_t> data;
     uint16_t checksum;
 
-    uint16_t compute_checksum()
+    uint16_t compute_checksum() const
     {
         uint16_t result = 0;
         for (auto b:data)
@@ -537,14 +544,14 @@ struct kim_data
 
     void dump()
     {
-        printf( "ID: %02X LOADED AT: %04X", id, adrs );
+        fprintf( stderr, "ID: %02X LOADED AT: %04X", id, adrs );
         for (int i=3;i!=data.size();i++)
         {
             if ((i%16)==3)
-                printf( "\n    " );
-            printf( "%02X ", data[i] );
+                fprintf( stderr, "\n    " );
+            fprintf( stderr, "%02X ", data[i] );
         }
-        printf( "\n" );
+        fprintf( stderr, "\n" );
     }
 
     bool operator==( const kim_data &other ) const
@@ -561,6 +568,183 @@ struct kim_data
     }
 
 };
+
+/// @brief Write data as binary to stdout. Note it just writes the content. Also dumps ID, address and checksum on stderr
+/// @param kd data to be written
+/// @return true of write successful
+bool write_data( const kim_data &kd )
+{
+    fprintf( stderr, "Writing data for ID=%02X ADRS=%04X CHKSUM=%04X\n", (int)kd.id, (int)kd.adrs, (int)kd.compute_checksum() );
+    return fwrite( kd.data.data()+3, kd.data.size()-3, 1, stdout )==1;  //  #### Ugly +/- 3
+}
+
+// #### Swap arguments
+void write_kim_hex( uint8_t b, std::vector<uint8_t> &bytes )
+{
+    bytes.push_back( "0123456789ABCDEF"[b/16] );
+    bytes.push_back( "0123456789ABCDEF"[b%16] );
+}
+
+void write_kim_hex( uint16_t w, std::vector<uint8_t> &bytes )
+{
+    write_kim_hex( (uint8_t)(w%256), bytes );
+    write_kim_hex( (uint8_t)(w/256), bytes );
+}
+
+// ### This should probably be a member function
+std::vector<uint8_t> kim_encode( const kim_data &kd )
+{
+    std::vector<uint8_t> bytes;
+
+    for (int i=0;i!=100;i++)
+        bytes.push_back( 0x16 );
+    bytes.push_back( '*' );
+
+    write_kim_hex( kd.id, bytes );
+    write_kim_hex( kd.adrs, bytes );
+
+    for (int i=3;i!=kd.data.size();i++) //  #### +3 sucks
+        write_kim_hex( kd.data[i], bytes );
+
+    bytes.push_back( '/' );
+    write_kim_hex( kd.compute_checksum(), bytes );
+    bytes.push_back( 0x04 );
+
+    return bytes;
+}
+
+bool write_kim( const kim_data &kd )
+{
+    fprintf( stderr, "Writing KIM-1 for ID=%02X ADRS=%04X CHKSUM=%04X\n", (int)kd.id, (int)kd.adrs, (int)kd.compute_checksum() );
+
+    auto bytes = kim_encode( kd );
+
+    return fwrite( bytes.data(), bytes.size(), 1, stdout )==1;
+}
+
+std::vector<bool> kim_encode_bits( const kim_data &kd )
+{
+    auto bytes = kim_encode( kd );
+
+    std::vector<bool> bits;
+
+    for (auto b:bytes)
+    {
+        for (int i=0;i!=8;i++)
+            bits.push_back( b&(1<<i) );
+    }
+
+    return bits;
+}
+
+bool write_bits( const kim_data &kd )
+{
+    fprintf( stderr, "Writing KIM-1 tape bits for ID=%02X ADRS=%04X CHKSUM=%04X\n", (int)kd.id, (int)kd.adrs, (int)kd.compute_checksum() );
+
+    auto bits = kim_encode_bits( kd );
+
+    for (auto b:bits)
+    {
+        std::cout << (int)b;
+    }
+
+    std::cout << "\n";
+
+    return true;
+}
+
+#define RATE 44100.0
+
+/// @brief Adds a second of silence
+/// @param bytes 
+void write_wav_silence( std::vector<uint8_t> &bytes )
+{
+    for (size_t i=0;i!=RATE;i++)
+        bytes .push_back( 128 );
+}
+
+void write_wav_freq( double freq, double duration, std::vector<uint8_t> &bytes )
+{
+    size_t samples = duration*RATE-0.5;
+    for (size_t t=0;t!=samples;t++)
+        bytes.push_back( 128+::sin(t/RATE*2*M_PI*freq)*80 );
+}
+
+void write_wav_2400Hz( std::vector<uint8_t> &bytes )
+{  
+    write_wav_freq( 2415, 2.484/1000, bytes );
+}
+
+void write_wav_3700Hz( std::vector<uint8_t> &bytes )
+{  
+    write_wav_freq( 3623, 2.484/1000, bytes );
+}
+
+void write_wav_bit( bool bit, std::vector<uint8_t> &bytes )
+{
+    write_wav_3700Hz( bytes );
+    if (bit)
+        write_wav_2400Hz( bytes );
+    else
+        write_wav_3700Hz( bytes );
+    write_wav_2400Hz( bytes );
+}
+
+void write_wav_header( size_t size )
+{
+    // WAV file header
+    char chunkId[4] = {'R', 'I', 'F', 'F'};
+    uint32_t chunkSize = size+44-8; // The total size of the file minus 8 bytes
+    char format[4] = {'W', 'A', 'V', 'E'};
+    char subchunk1Id[4] = {'f', 'm', 't', ' '};
+    uint32_t subchunk1Size = 16; // The size of the remainder of the Subchunk which follows this number
+    uint16_t audioFormat = 1; // PCM = 1 (i.e. Linear quantization)
+    uint16_t numChannels = 1; // Mono = 1, Stereo = 2
+    uint32_t sampleRate = 44100; // Sampling frequency of the audio data
+    uint32_t byteRate = sampleRate * numChannels * 8 / 8; // The number of bytes per second
+    uint16_t blockAlign = numChannels * 8 / 8; // The number of bytes per sample block
+    uint16_t bitsPerSample = 8; // The number of bits per sample
+    char subchunk2Id[4] = {'d', 'a', 't', 'a'};
+    uint32_t subchunk2Size = size; // The number of bytes in the data
+
+    // Write the header to stdout
+    fwrite(chunkId, sizeof(char), 4, stdout);
+    fwrite(&chunkSize, sizeof(uint32_t), 1, stdout);
+    fwrite(format, sizeof(char), 4, stdout);
+    fwrite(subchunk1Id, sizeof(char), 4, stdout);
+    fwrite(&subchunk1Size, sizeof(uint32_t), 1, stdout);
+    fwrite(&audioFormat, sizeof(uint16_t), 1, stdout);
+    fwrite(&numChannels, sizeof(uint16_t), 1, stdout);
+    fwrite(&sampleRate, sizeof(uint32_t), 1, stdout);
+    fwrite(&byteRate, sizeof(uint32_t), 1, stdout);
+    fwrite(&blockAlign, sizeof(uint16_t), 1, stdout);
+    fwrite(&bitsPerSample, sizeof(uint16_t), 1, stdout);
+    fwrite(subchunk2Id, sizeof(char), 4, stdout);
+    fwrite(&subchunk2Size, sizeof(uint32_t), 1, stdout);
+}
+
+bool write_wav( const kim_data &kd )
+{
+    fprintf( stderr, "Writing KIM-1 tape WAV for ID=%02X ADRS=%04X CHKSUM=%04X\n", (int)kd.id, (int)kd.adrs, (int)kd.compute_checksum() );
+
+    std::vector<uint8_t> bytes;
+
+        //  2 seconds silence
+    write_wav_silence( bytes );
+    write_wav_silence( bytes );
+
+    auto bits = kim_encode_bits( kd );
+    for (auto b:bits)
+        write_wav_bit( b, bytes );
+
+    write_wav_3700Hz( bytes );
+
+    write_wav_silence( bytes );
+    write_wav_silence( bytes );
+
+    write_wav_header( bytes.size() );
+    return fwrite( bytes.data(), bytes.size(), 1, stdout )==1;
+}
 
 bool kim_data_from_bits( const std::vector<bool> &encoded, kim_data &result )
 {
@@ -596,6 +780,20 @@ loop:
         return false;
     }
 
+// std::cerr <<"\n-----------\n";
+// auto p = slash;
+// int i = 0;
+// while (p!=e)
+// {    std::cerr << "[" << *p++ << "]";
+//     i++;
+//     if (i==8)
+//     {
+//         std::cerr << "\n";
+//         i = 0;
+//     }
+// }
+// std::cerr <<"\n\n";
+
     //  Look for the EOF 0x04 '00000100'
     auto eos = find_bits( slash, e, { false, false, true, false, false, false, false, false }, 8 );
     if (eos==e)
@@ -616,7 +814,7 @@ loop:
     if (!bytes_from_bits( b, slash, result.data ))
     {
         if (!silent)
-            std::cout << "Cannot parse content\n";
+            std::cerr << "Cannot parse content\n";
         return false;
     }
 
@@ -624,7 +822,7 @@ loop:
     if (!bytes_from_bits( slash+8, eos, checksum ))
     {
         if (!silent)
-            std::cout << "Cannot parse checksum\n";
+            std::cerr << "Cannot parse checksum\n";
         return false;
     }
 
@@ -637,7 +835,7 @@ loop:
     if (result.compute_checksum()!=result.checksum)
     {
         if (!silent)
-            std::cout << "Wrong checksum value\n";
+            std::cerr << "Wrong checksum value\n";
         return false;
     }
 
@@ -682,7 +880,7 @@ void parse( const std::vector<sample_t> data, std::string patch )
     bs.patch( patch );
 
         //  we interate all the solutions
-    std::cout << "Generating " << bs.fix_count() << " combinations\n";
+    std::clog << "Generating " << bs.fix_count() << " combinations\n";
     for (size_t i=0;i!=bs.fix_count();i++)
     {
         auto bits = bs.bits( i );
@@ -696,9 +894,28 @@ void parse( const std::vector<sample_t> data, std::string patch )
             if (!found)
             {
                 matches.push_back( kd );
-                std::cout << "Found parsable data with correct checksum:\n";
+                std::clog << "Found parsable data with correct checksum:\n";
                 kd.dump();
             }
+        }
+    }
+
+    if (flag_write_data || flag_write_kim || flag_write_bits || flag_write_wav)
+    {
+        if (matches.size()==0)
+            std::cerr << "**** Not data recovered, cannot write data\n";
+        if (matches.size()>1)
+            std::cerr << "**** Several data matches, writing first match\n";
+        if (matches.size()>=1)
+        {
+            if (flag_write_data)
+                write_data( matches[0] );
+            if (flag_write_kim)
+                write_kim( matches[0] );
+            if (flag_write_bits)
+                write_bits( matches[0] );
+            if (flag_write_wav)
+                write_wav( matches[0] );
         }
     }
 
@@ -801,6 +1018,7 @@ int main(int argc, char* argv[])
             std::cerr << "kimreader [--silent true|false] [--verbose true|false] [--smooth <NUM>] [--bitstream] [--bytestream offset] file.wav\n";
             std::cerr << "  --bitstream: dumps the bitstream (with error replaced by zeros)\n";
             std::cerr << "  --bytestream OFFSET: transform the bitstream into bytes, skipping offset bits\n";
+            std::cerr << "  --output data|kim|bits|wav: output the data on the standard output in the specified format\n";
             std::cerr << "  silent false mode:\n";
             std::cerr << "  '*' : got an zero crossing that is not 2400Hz or 3700Hz\n";
             std::cerr << "  '?' : got a transition from 2400Hz to 3700Hz that is not in a 9-9-6 or 9-6-6 pattern\n";
@@ -836,6 +1054,24 @@ int main(int argc, char* argv[])
             argv++;
             dump_bytestream = true;
             dump_bytestream_offset = ::atoi( *argv );
+        }
+        else if (!strcmp(*argv,"--output"))
+        {
+            argc--;
+            argv++;
+            if (*argv=="data"s)    //  Just the data, in binary, as loaded in memory
+                flag_write_data = true;
+            else if (*argv=="kim"s)       //  The content in kim format (100*SYN, headers, etc...)
+                flag_write_kim = true;
+            else if (*argv=="bits"s)      //  The content of tape as raw bits
+                flag_write_bits = true;
+            else if (*argv=="wav"s)      //  The content as a wav tape
+                flag_write_wav = true;
+            else
+            {
+                std::cerr << "output must be data|kim|bits|wav\n";
+                ::exit( EXIT_FAILURE );
+            }
         }
         else if (!strcmp(*argv,"--patch"))
         {
